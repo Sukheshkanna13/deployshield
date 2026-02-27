@@ -16,10 +16,10 @@ const useStore = create((set, get) => ({
   // ── Active session ─────────────────────────────────────────────────────
   session: null,           // { id, type, service, failureMode, startTime, maxScore }
 
-  startSession: ({ type, service = 'api-gateway', failureMode = 'downstream_fail' }) => {
-    const id = `dp-${Date.now().toString(36)}`
+  startSession: ({ id, type, service = 'api-gateway', failureMode = 'downstream_fail' }) => {
+    const sessionId = id || `dp-${Date.now().toString(36)}`
     set({
-      session: { id, type, service, failureMode, startTime: Date.now(), maxScore: 0 },
+      session: { id: sessionId, type, service, failureMode, startTime: Date.now(), maxScore: 0 },
       metrics: { history: [], snapshot: null, scoring: { score: 0, phase: 'IDLE' }, attrs: [] },
       alerts: [],
       ai: { text: '', loading: false, error: null, retrieved: [] },
@@ -57,10 +57,10 @@ const useStore = create((set, get) => ({
 
   // ── Live metrics ────────────────────────────────────────────────────────
   metrics: {
-    history:  [],
+    history: [],
     snapshot: null,
-    scoring:  { score: 0, phase: 'IDLE' },
-    attrs:    [],
+    scoring: { score: 0, phase: 'IDLE' },
+    attrs: [],
   },
 
   pushMetricSnapshot: (snapshot) => {
@@ -87,12 +87,12 @@ const useStore = create((set, get) => ({
   // ── AI / Claude ─────────────────────────────────────────────────────────
   ai: { text: '', loading: false, error: null, retrieved: [] },
 
-  setAiLoading:   (loading)   => set(state => ({ ai: { ...state.ai, loading, error: null } })),
-  appendAiToken:  (token)     => set(state => ({ ai: { ...state.ai, text: state.ai.text + token } })),
-  setAiError:     (error)     => set(state => ({ ai: { ...state.ai, error, loading: false } })),
+  setAiLoading: (loading) => set(state => ({ ai: { ...state.ai, loading, error: null } })),
+  appendAiToken: (token) => set(state => ({ ai: { ...state.ai, text: state.ai.text + token } })),
+  setAiError: (error) => set(state => ({ ai: { ...state.ai, error, loading: false } })),
   setAiRetrieved: (retrieved) => set(state => ({ ai: { ...state.ai, retrieved } })),
-  clearAiText:    ()          => set(state => ({ ai: { ...state.ai, text: '', retrieved: [] } })),
-  finishAi:       (retrieved = []) => set(state => ({
+  clearAiText: () => set(state => ({ ai: { ...state.ai, text: '', retrieved: [] } })),
+  finishAi: (retrieved = []) => set(state => ({
     ai: { ...state.ai, loading: false, retrieved: retrieved || state.ai.retrieved }
   })),
 
@@ -100,14 +100,14 @@ const useStore = create((set, get) => ({
   settings: {
     apiKey: '',                    // Anthropic API key (user can set in Settings page)
     thresholds: {
-      warning:   50,
-      critical:  72,
+      warning: 50,
+      critical: 72,
       emergency: 86,
     },
-    tickIntervalMs:  5000,         // metric collection interval
+    tickIntervalMs: 5000,         // metric collection interval
     scoreIntervalMs: 15000,        // scoring interval (every 3 ticks)
-    baselineTicks:   48,           // ticks needed before IF trains
-    autoAnalyze:     true,         // auto-call Claude on CRITICAL
+    baselineTicks: 48,           // ticks needed before IF trains
+    autoAnalyze: true,         // auto-call Claude on CRITICAL
     selectedService: 'api-gateway',
     selectedFailure: 'downstream_fail',
   },
@@ -126,6 +126,10 @@ const useStore = create((set, get) => ({
   // ── RAG pipeline status ─────────────────────────────────────────────────
   ragStatus: { initialized: false, totalIncidents: 0 },
   setRagStatus: (status) => set({ ragStatus: status }),
+
+  // ── WebSocket ───────────────────────────────────────────────────────────
+  wsConnection: null,
+  setwsConnection: (ws) => set({ wsConnection: ws }),
 }))
 
 export default useStore

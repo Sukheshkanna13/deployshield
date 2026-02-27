@@ -1,0 +1,182 @@
+[
+  {
+    "id": "INC-001",
+    "pattern": "p99 latency spike + error rate surge, request rate stable",
+    "rootCause": "Database connection pool exhaustion — max_connections hit under sustained load, queries queuing behind lock waits",
+    "resolution": "Increase PostgreSQL max_connections to 500, add PgBouncer connection pooler, identify and kill long-running transactions",
+    "duration": "23 minutes",
+    "severity": "CRITICAL",
+    "service": "api-gateway",
+    "attribution": [
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 4.8, "rawZ": 4.8, "pct": 290 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 3.6, "rawZ": 3.6, "pct": 840 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 1.2, "rawZ": 1.2, "pct": 22 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 0.4, "rawZ": -0.4, "pct": -8 }
+    ]
+  },
+  {
+    "id": "INC-002",
+    "pattern": "request rate drop + p99 spike, error rate moderate increase",
+    "rootCause": "Downstream payment API timeout cascade — circuit breaker open, requests failing fast after 30s timeout",
+    "resolution": "Activate circuit breaker with 5s timeout, implement retry with exponential backoff, degrade gracefully to queued payments",
+    "duration": "41 minutes",
+    "severity": "CRITICAL",
+    "service": "payment-svc",
+    "attribution": [
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 4.1, "rawZ": -4.1, "pct": -52 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 3.9, "rawZ": 3.9, "pct": 380 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 2.8, "rawZ": 2.8, "pct": 440 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 0.6, "rawZ": 0.6, "pct": 11 }
+    ]
+  },
+  {
+    "id": "INC-003",
+    "pattern": "saturation spike + p99 degradation, error rate gradual rise",
+    "rootCause": "Memory leak in JVM service — heap exhaustion triggering aggressive GC pauses, increasing stop-the-world events",
+    "resolution": "Trigger rolling restart of affected pods. Add -Xmx heap limit. Profile with async-profiler to identify leak source",
+    "duration": "67 minutes",
+    "severity": "EMERGENCY",
+    "service": "order-processor",
+    "attribution": [
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 5.2, "rawZ": 5.2, "pct": 88 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 3.4, "rawZ": 3.4, "pct": 220 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 2.1, "rawZ": 2.1, "pct": 190 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 1.8, "rawZ": -1.8, "pct": -28 }
+    ]
+  },
+  {
+    "id": "INC-004",
+    "pattern": "all metrics degraded simultaneously — error rate dominant signal",
+    "rootCause": "Bad deploy introduced N+1 query pattern — each API request triggering 50-200 sequential DB queries instead of 1 batched query",
+    "resolution": "Immediate rollback to previous commit. Fix ORM eager-loading config. Add query count logging in staging CI gate",
+    "duration": "12 minutes",
+    "severity": "EMERGENCY",
+    "service": "api-gateway",
+    "attribution": [
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 6.1, "rawZ": 6.1, "pct": 1240 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 5.3, "rawZ": 5.3, "pct": 410 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 3.8, "rawZ": 3.8, "pct": 68 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 3.2, "rawZ": -3.2, "pct": -44 }
+    ]
+  },
+  {
+    "id": "INC-005",
+    "pattern": "CPU saturation spike, moderate p99, error rate minor",
+    "rootCause": "Cryptographic function deployed without hardware acceleration — RSA signing running on software fallback after OpenSSL config regression",
+    "resolution": "Revert openssl.cnf change. Enable AES-NI and PCLMULQDQ CPU extensions. Add crypto benchmark to CI pipeline",
+    "duration": "19 minutes",
+    "severity": "WARNING",
+    "service": "auth-svc",
+    "attribution": [
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 4.6, "rawZ": 4.6, "pct": 74 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 2.9, "rawZ": 2.9, "pct": 160 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 0.9, "rawZ": 0.9, "pct": 55 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 0.4, "rawZ": -0.4, "pct": -6 }
+    ]
+  },
+  {
+    "id": "INC-006",
+    "pattern": "sudden request rate collapse, p99 normal, errors at 100%",
+    "rootCause": "Invalid deployment config — missing environment variable REDIS_URL caused connection panic on startup, all requests returning 500",
+    "resolution": "Rollback deployment. Add config validation at service startup. Block deploy if required env vars missing in pre-deploy check",
+    "duration": "8 minutes",
+    "severity": "EMERGENCY",
+    "service": "api-gateway",
+    "attribution": [
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 8.2, "rawZ": -8.2, "pct": -91 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 7.4, "rawZ": 7.4, "pct": 12400 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 0.8, "rawZ": 0.8, "pct": 12 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 0.3, "rawZ": -0.3, "pct": -8 }
+    ]
+  },
+  {
+    "id": "INC-007",
+    "pattern": "gradual p99 increase over 15 minutes, saturation rising, errors stable",
+    "rootCause": "Disk I/O saturation — logging level accidentally set to DEBUG in production, filling disk and causing fsync latency in all DB writes",
+    "resolution": "Set log level to INFO. Clear disk space. Add disk I/O alert. Log level gating in deployment config validation",
+    "duration": "35 minutes",
+    "severity": "CRITICAL",
+    "service": "order-processor",
+    "attribution": [
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 3.7, "rawZ": 3.7, "pct": 195 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 3.1, "rawZ": 3.1, "pct": 52 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 0.7, "rawZ": 0.7, "pct": 30 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 0.5, "rawZ": -0.5, "pct": -9 }
+    ]
+  },
+  {
+    "id": "INC-008",
+    "pattern": "request rate drop + high error rate, p99 bimodal distribution",
+    "rootCause": "Thread pool starvation — blocking I/O in async handler exhausted event loop. New requests timing out before processing starts",
+    "resolution": "Move blocking calls to dedicated thread pool. Increase Netty worker threads. Add async profiling to detect event loop blocking",
+    "duration": "28 minutes",
+    "severity": "CRITICAL",
+    "service": "auth-svc",
+    "attribution": [
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 3.9, "rawZ": -3.9, "pct": -48 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 3.5, "rawZ": 3.5, "pct": 620 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 2.7, "rawZ": 2.7, "pct": 142 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 1.4, "rawZ": 1.4, "pct": 28 }
+    ]
+  },
+  {
+    "id": "INC-009",
+    "pattern": "slow p99 degradation over 45 minutes, saturation moderate, rate normal",
+    "rootCause": "Cache stampede after Redis failover — all requests hitting database simultaneously when cache miss rate jumped to 100%",
+    "resolution": "Add probabilistic early expiration (PER) to cache. Implement request coalescing. Set appropriate Redis sentinel timeouts",
+    "duration": "52 minutes",
+    "severity": "CRITICAL",
+    "service": "api-gateway",
+    "attribution": [
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 4.2, "rawZ": 4.2, "pct": 248 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 2.3, "rawZ": 2.3, "pct": 38 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 1.6, "rawZ": 1.6, "pct": 120 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 0.8, "rawZ": 0.8, "pct": 12 }
+    ]
+  },
+  {
+    "id": "INC-010",
+    "pattern": "all metrics simultaneously anomalous after config change",
+    "rootCause": "Rate limiter misconfiguration — global rate limit set to 10 req/s instead of 10000 req/s after unit conversion bug in config parser",
+    "resolution": "Rollback config change. Fix unit handling in config parser. Add integration test for config validation with realistic traffic values",
+    "duration": "6 minutes",
+    "severity": "EMERGENCY",
+    "service": "api-gateway",
+    "attribution": [
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 7.8, "rawZ": -7.8, "pct": -99 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 6.9, "rawZ": 6.9, "pct": 9800 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 2.4, "rawZ": 2.4, "pct": 88 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 1.1, "rawZ": -1.1, "pct": -22 }
+    ]
+  },
+  {
+    "id": "INC-011",
+    "pattern": "saturation dominant, p99 rising, correlates with traffic peak",
+    "rootCause": "Horizontal pod autoscaler lag — HPA scales on 1-minute CPU average, 90-second cold start means 2.5 minutes without capacity during spike",
+    "resolution": "Pre-warm pods using predictive scaling. Reduce HPA sync period to 15s. Set min replicas higher during peak hours via KEDA schedule",
+    "duration": "18 minutes",
+    "severity": "WARNING",
+    "service": "order-processor",
+    "attribution": [
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 3.8, "rawZ": 3.8, "pct": 62 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 2.6, "rawZ": 2.6, "pct": 130 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 1.9, "rawZ": 1.9, "pct": 32 },
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 0.8, "rawZ": 0.8, "pct": 42 }
+    ]
+  },
+  {
+    "id": "INC-012",
+    "pattern": "error rate spike isolated to one endpoint, other metrics normal",
+    "rootCause": "Schema migration without backward compatibility — new non-nullable column added without default, old pods writing NULL causing constraint violations",
+    "resolution": "Rollback schema migration. Apply with multi-phase: add nullable → backfill → add constraint. Enforce compatibility in CI migration linter",
+    "duration": "14 minutes",
+    "severity": "CRITICAL",
+    "service": "payment-svc",
+    "attribution": [
+      { "key": "errorRate", "label": "Error Rate", "unit": "%", "z": 5.6, "rawZ": 5.6, "pct": 880 },
+      { "key": "p99", "label": "P99 Latency", "unit": "ms", "z": 1.4, "rawZ": 1.4, "pct": 65 },
+      { "key": "rate", "label": "Request Rate", "unit": "req/s", "z": 0.6, "rawZ": -0.6, "pct": -9 },
+      { "key": "saturation", "label": "Saturation", "unit": "%", "z": 0.3, "rawZ": 0.3, "pct": 5 }
+    ]
+  }
+]
