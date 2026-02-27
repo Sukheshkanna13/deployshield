@@ -105,6 +105,11 @@ export class PrometheusScraper {
             }
         }
 
+        // ── DEGRADED mode — always use simulation engine for anomaly ramp ──
+        if (this.mode === 'DEGRADED') {
+            return this.simulateTick()
+        }
+
         // ── Simulation path ──────────────────────────────────────────────
         if (this.simulationMode) {
             return this.simulateTick()

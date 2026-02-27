@@ -123,7 +123,26 @@ export default function Dashboard() {
           </select>
 
           <Btn label="▶ Start Monitoring" disabled={!!session} onClick={() => deploy('NORMAL', settings.selectedService, settings.selectedFailure)} color="#22C55E" />
-          <Btn label="⚠ Inject Fault" disabled={!!session} onClick={() => deploy('DEGRADED', settings.selectedService, settings.selectedFailure)} color="#EF4444" />
+
+          {/* During active session: Inject Fault or Recover */}
+          {session && (
+            <>
+              <Btn label="⚠ Inject Fault" disabled={false} onClick={async () => {
+                try {
+                  await fetch(`http://localhost:3001/api/session/${session.id}/inject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ failureMode: settings.selectedFailure })
+                  })
+                } catch (e) { console.error('[Inject]', e) }
+              }} color="#EF4444" />
+              <Btn label="✓ Recover" disabled={false} onClick={async () => {
+                try {
+                  await fetch(`http://localhost:3001/api/session/${session.id}/recover`, { method: 'POST' })
+                } catch (e) { console.error('[Recover]', e) }
+              }} color="#0EA5E9" />
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-4">

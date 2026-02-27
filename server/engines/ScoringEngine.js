@@ -9,7 +9,7 @@
  */
 import { IsolationForest } from './IsolationForest.js'
 
-export const BASELINE_TICKS_NEEDED = 48 // 48 × 5s = 4 minutes of baseline
+export const BASELINE_TICKS_NEEDED = 12 // 12 × 5s = 60 seconds baseline (IF needs ≥10 samples)
 
 export class ScoringEngine {
   constructor() {
@@ -88,7 +88,7 @@ export class ScoringEngine {
     const avg = recent.reduce((a, b) => a + b, 0) / recent.length
     const prev = recent[0]
     const delta = avg - prev
-    if (delta > 8)  return 'rising'
+    if (delta > 8) return 'rising'
     if (delta < -8) return 'falling'
     return 'stable'
   }

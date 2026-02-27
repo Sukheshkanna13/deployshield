@@ -10,6 +10,7 @@
  *   - Same severity won't re-fire until score drops 15+ points first
  *   - Different severity fires immediately if threshold crossed
  */
+import { sendAlertEmail } from '../services/emailService.js'
 
 export const THRESHOLDS = {
   WARNING: { score: 50, consecutiveTicks: 3, color: '#EAB308' },
@@ -77,7 +78,7 @@ export class AlertEngine {
     this.sevHistory.add(sev)
 
     if (sev === 'CRITICAL' || sev === 'EMERGENCY') {
-      this._sendSlackAlert(alert)
+      this._sendEmailAlert(alert)
     }
 
     return alert
@@ -99,64 +100,12 @@ export class AlertEngine {
     return actions[sev] || 'Monitor situation.'
   }
 
-  async _sendSlackAlert(alert) {
-    if (!this.project || !this.project.slackWebhookUrl) return;
-
-    const payload = {
-      text: `🚨 DeployShield Alert: ${alert.sev} detected in deployment ${alert.deploymentId}!`,
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: `🚨 ${alert.sev} Alert: Deployment Anomaly Detected`
-          }
-        },
-        {
-          type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Deployment ID:*\n${alert.deploymentId}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Risk Score:*\n${alert.score}/100`
-            }
-          ]
-        },
-        {
-          type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Breached Metric:*\n${alert.primaryDriver} (${alert.pct > 0 ? '+' : ''}${Math.round(alert.pct)}%)`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Recommended Action:*\n${alert.action}`
-            }
-          ]
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*<http://localhost:5173/dashboard?session=${alert.deploymentId}|View Live Dashboard Session>*`
-          }
-        }
-      ]
-    };
-
+  async _sendEmailAlert(alert) {
+    const projectName = this.project?.name || 'Unknown Project'
     try {
-      await fetch(this.project.slackWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      console.log(`[AlertEngine] Sent Slack notification for ${alert.deploymentId}`);
+      await sendAlertEmail(alert, projectName)
     } catch (err) {
-      console.error(`[AlertEngine] Failed to send Slack alert:`, err.message);
+      console.error(`[AlertEngine] Failed to send email alert:`, err.message)
     }
   }
 

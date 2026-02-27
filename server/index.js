@@ -5,7 +5,7 @@ import * as http from 'http'
 import dotenv from 'dotenv'
 import webhookRoute from './routes/webhook.js'
 import projectsRoute from './routes/projects.js'
-import { startSession, getActiveSessions } from './SessionManager.js'
+import { startSession, getActiveSessions, injectFault, recoverSession } from './SessionManager.js'
 import { ragPipeline } from './ai/ragPipeline.js'
 
 dotenv.config({ path: '../.env.local' })
@@ -22,6 +22,21 @@ app.get('/api/session/:id', (req, res) => {
     const s = sessions.find(s => s.id === req.params.id)
     if (!s) return res.status(404).json({ error: 'Not found' })
     res.json(s)
+})
+
+// Inject fault into running session
+app.post('/api/session/:id/inject', (req, res) => {
+    const { failureMode } = req.body || {}
+    const ok = injectFault(req.params.id, failureMode)
+    if (ok) res.json({ message: 'Fault injected', sessionId: req.params.id })
+    else res.status(404).json({ error: 'Session not found' })
+})
+
+// Recover session from degraded mode
+app.post('/api/session/:id/recover', (req, res) => {
+    const ok = recoverSession(req.params.id)
+    if (ok) res.json({ message: 'Session recovered', sessionId: req.params.id })
+    else res.status(404).json({ error: 'Session not found' })
 })
 
 // Health check

@@ -70,6 +70,11 @@ export function startSession({ id, service, environment, failureMode, deployType
             console.error(`[SessionManager] Database error saving snapshot for ${id}:`, dbErr.message)
         }
 
+        // Log every 3rd tick for debugging
+        if (history.length % 3 === 0 || score > 10) {
+            console.log(`[Tick] ${service} | tick=${history.length} phase=${phase} score=${score} mode=${scraper.mode || 'N/A'}`)
+        }
+
         // Broadcast snapshot
         broadcast({
             type: 'METRIC_TICK',
@@ -128,5 +133,42 @@ export function endSession(id) {
 
     console.log(`[Session] Ended session ${id}`)
     broadcast({ type: 'SESSIONS_UPDATE', payload: getActiveSessions() })
+    return true
+}
+
+/** Inject fault into running session's scraper */
+export function injectFault(id, failureMode) {
+    const session = sessions.get(id)
+    if (!session) return false
+
+    if (typeof session.scraper.injectFault === 'function') {
+        session.scraper.injectFault(failureMode)
+        console.log(`[Session] Fault injected into ${id}: ${failureMode}`)
+        broadcast({ type: 'FAULT_INJECTED', payload: { sessionId: id, failureMode } })
+        return true
+    } else {
+        // PrometheusScraper — switch mode directly
+        session.scraper.mode = 'DEGRADED'
+        session.scraper.ramp = 0
+        if (failureMode) session.scraper.failureMode = failureMode
+        console.log(`[Session] Fault injected into ${id} (Prometheus): ${failureMode}`)
+        broadcast({ type: 'FAULT_INJECTED', payload: { sessionId: id, failureMode } })
+        return true
+    }
+}
+
+/** Recover a session's scraper from degraded mode */
+export function recoverSession(id) {
+    const session = sessions.get(id)
+    if (!session) return false
+
+    if (typeof session.scraper.recover === 'function') {
+        session.scraper.recover()
+    } else {
+        session.scraper.mode = 'NORMAL'
+        session.scraper.ramp = 0
+    }
+    console.log(`[Session] Recovered session ${id}`)
+    broadcast({ type: 'FAULT_RECOVERED', payload: { sessionId: id } })
     return true
 }

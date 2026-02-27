@@ -7,6 +7,9 @@
  *   errorRate  → % of non-2xx responses in rolling window
  *   p99        → 99th-percentile response time (ms) in rolling window
  *   saturation → % of probes that exceeded the timeout threshold
+ *
+ * DEGRADED mode: overlays synthetic anomalies on top of real probe data
+ * to simulate what happens when a real deployment breaks.
  */
 
 const WINDOW_SIZE = 60  // rolling window of last 60 probes (~5 min at 5s interval)
@@ -22,12 +25,67 @@ export class VercelScraper {
         // Rolling window of probe results
         this.probes = []
 
+        // Degradation mode
+        this.mode = opts.mode || 'NORMAL'     // NORMAL | DEGRADED
+        this.ramp = 0                          // 0 → 1 over ~60 seconds
+        this.degradedTick = 0
+        this.failureMode = opts.failureMode || 'downstream_fail'
+
+        // Anomaly profiles (how each failure manifests)
+        this.anomalyModes = {
+            downstream_fail: { latencyMul: 8, errorInjection: 0.15, timeoutInjection: 0.10 },
+            db_timeout: { latencyMul: 12, errorInjection: 0.08, timeoutInjection: 0.25 },
+            memory_leak: { latencyMul: 5, errorInjection: 0.12, timeoutInjection: 0.18 },
+            cpu_spike: { latencyMul: 6, errorInjection: 0.20, timeoutInjection: 0.15 },
+        }
+
         // Current metric values (for fallback)
         this.curr = { rate: 1000, errorRate: 0.5, p99: 100, saturation: 20 }
     }
 
+    /** Switch to degraded mode (called by SessionManager inject API) */
+    injectFault(failureMode) {
+        console.log(`[VercelScraper] Injecting fault: ${failureMode || this.failureMode}`)
+        this.mode = 'DEGRADED'
+        this.failureMode = failureMode || this.failureMode
+        this.ramp = 0
+        this.degradedTick = 0
+    }
+
+    /** Recover from degraded mode */
+    recover() {
+        console.log(`[VercelScraper] Recovering to normal mode`)
+        this.mode = 'NORMAL'
+        this.ramp = 0
+        this.degradedTick = 0
+    }
+
     async fetchMetrics() {
         const probeResult = await this.probe()
+
+        // In DEGRADED mode, overlay synthetic anomalies on real data
+        if (this.mode === 'DEGRADED') {
+            this.degradedTick++
+            // Ramp from 0 → 1 over 12 ticks (60 seconds)
+            this.ramp = Math.min(1, this.degradedTick / 12)
+
+            const anomaly = this.anomalyModes[this.failureMode] || this.anomalyModes.downstream_fail
+
+            // Multiply latency
+            probeResult.duration = Math.round(probeResult.duration * (1 + this.ramp * anomaly.latencyMul))
+
+            // Inject random errors based on ramp
+            if (Math.random() < this.ramp * anomaly.errorInjection * 3) {
+                probeResult.ok = false
+                probeResult.status = [500, 502, 503, 504][Math.floor(Math.random() * 4)]
+            }
+
+            // Inject timeouts
+            if (Math.random() < this.ramp * anomaly.timeoutInjection * 2) {
+                probeResult.duration = TIMEOUT_MS + Math.floor(Math.random() * 2000)
+            }
+        }
+
         this.probes.push(probeResult)
         if (this.probes.length > WINDOW_SIZE) this.probes.shift()
 
@@ -41,11 +99,10 @@ export class VercelScraper {
         const p99Index = Math.floor(durations.length * 0.99)
         const p99 = durations[Math.min(p99Index, durations.length - 1)] || 100
 
-        // Calculate rates — scale up to make them meaningful in the dashboard
-        // A probe every 5s = 0.2 req/s, so we simulate "equivalent traffic" based on response quality
+        // Calculate rates
         const availability = ((total - errors) / total) * 100
-        const baseRate = 1000 // nominal request rate
-        const rate = Math.round(baseRate * (availability / 100))  // drops when errors rise
+        const baseRate = 1000
+        const rate = Math.round(baseRate * (availability / 100))
         const errorRate = total > 0 ? (errors / total) * 100 : 0
         const saturation = total > 0 ? (timeouts / total) * 100 : 0
 
