@@ -31,6 +31,19 @@ Our system doesn't guess; it calculates. Here is the lifecycle of the AI monitor
 
 ## 🌊 System Architecture & Data Flow
 
+```mermaid
+graph TD
+    A[Target URL e.g., Vercel / Amazon] -->|Scraped every 5s| B(Backend Scraper Node.js)
+    B -->|Ingests Telemetry| C{Isolation Forest Engine}
+    C -->|Calculates Z-Scores & Risk| D[WebSocket Server]
+    D -->|Streams Data| E[React Dashboard]
+    
+    E -->|User clicks ANALYZE| F[Claude AI Engine]
+    F -->|Fingerprints Anomaly| G[(AIOps Vector DB)]
+    G -->|Returns Top Match| F
+    F -->|Streams Root Cause| E
+```
+
 ```text
 [ Live Vercel App ] <-- (5s Pings) -- [ DeployShield Scraper ]
                                             |
