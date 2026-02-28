@@ -5,10 +5,10 @@ import * as http from 'http'
 import dotenv from 'dotenv'
 import webhookRoute from './routes/webhook.js'
 import projectsRoute from './routes/projects.js'
-import { startSession, getActiveSessions, injectFault, recoverSession } from './SessionManager.js'
+import { startSession, getActiveSessions, injectFault, recoverSession, triggerManualAnalysis } from './SessionManager.js'
 import { ragPipeline } from './ai/ragPipeline.js'
 
-dotenv.config({ path: '../.env.local' })
+dotenv.config({ path: '.env.local' })
 
 const app = express()
 app.use(cors())
@@ -37,6 +37,13 @@ app.post('/api/session/:id/recover', (req, res) => {
     const ok = recoverSession(req.params.id)
     if (ok) res.json({ message: 'Session recovered', sessionId: req.params.id })
     else res.status(404).json({ error: 'Session not found' })
+})
+
+// Trigger manual AI analysis
+app.post('/api/session/:id/analyze', (req, res) => {
+    const ok = triggerManualAnalysis(req.params.id)
+    if (ok) res.json({ message: 'Analysis started', sessionId: req.params.id })
+    else res.status(404).json({ error: 'Session not found or analysis already running' })
 })
 
 // Health check

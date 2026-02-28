@@ -76,7 +76,7 @@ export async function streamAnalysis({
   const apiKey = process.env.VITE_ANTHROPIC_API_KEY
   if (!apiKey) {
     onError?.('VITE_ANTHROPIC_API_KEY not set in .env.local')
-    onDone?.()
+    onDone?.({ retrieved: [] })
     return
   }
 

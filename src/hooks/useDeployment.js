@@ -168,9 +168,14 @@ export function useDeployment() {
     endSession()
   }, [session, endSession])
 
-  const manualAnalyze = useCallback(() => {
-    console.warn('Manual analyse requires HTTP endpoint')
-  }, [])
+  const manualAnalyze = useCallback(async () => {
+    if (!session?.id) return
+    try {
+      await fetch(`http://localhost:3001/api/session/${session.id}/analyze`, { method: 'POST' })
+    } catch (e) {
+      console.error('Failed to trigger manual analysis:', e)
+    }
+  }, [session])
 
   return {
     deploy,

@@ -45,64 +45,72 @@ export function startSession({ id, service, environment, failureMode, deployType
 
     // Main tick loop
     const tickInterval = setInterval(async () => {
-        const snapshot = await scraper.fetchMetrics()
-        if (!snapshot) return
+        console.log(`[Tick] Starting tick for ${id}...`)
 
-        history.push(snapshot)
-        if (history.length > 144) history.shift() // keep last 12 mins at 5s = 144 ticks
-
-        const { score, phase, ifScore, ewmaScore, combined } = scoringEngine.update(snapshot, history)
-        const attribution = attributionEngine.compute(snapshot, history.slice(0, 48))
-
-        // Save Metric Snapshot to Database
         try {
-            await prisma.metricSnapshot.create({
-                data: {
-                    sessionId: id,
-                    rate: snapshot.rate,
-                    errorRate: snapshot.errorRate,
-                    p99: snapshot.p99,
-                    saturation: snapshot.saturation,
-                    riskScore: score
-                }
-            })
-        } catch (dbErr) {
-            console.error(`[SessionManager] Database error saving snapshot for ${id}:`, dbErr.message)
-        }
-
-        // Log every 3rd tick for debugging
-        if (history.length % 3 === 0 || score > 10) {
-            console.log(`[Tick] ${service} | tick=${history.length} phase=${phase} score=${score} mode=${scraper.mode || 'N/A'}`)
-        }
-
-        // Broadcast snapshot
-        broadcast({
-            type: 'METRIC_TICK',
-            payload: { sessionId: id, snapshot, scoring: { score, phase }, attribution }
-        })
-
-        // Check for alerts
-        const alert = alertEngine.evaluate(score, attribution, id)
-        if (alert) {
-            console.log(`[Alert] ${alert.sev} fired for ${id} (Score: ${score})`)
-            broadcast({ type: 'ALERT', payload: alert })
-
-            // Auto-analyze criticals
-            if (alert.autoAnalyze) {
-                broadcast({ type: 'AI_STREAM_START', payload: { sessionId: id } })
-
-                streamAnalysis({
-                    score,
-                    deploymentId: id,
-                    attribution,
-                    history: history.slice(-6),
-                    onToken: (text) => broadcast({ type: 'AI_STREAM_TOKEN', payload: { sessionId: id, text } }),
-                    onDone: ({ retrieved }) => broadcast({ type: 'AI_STREAM_DONE', payload: { sessionId: id, retrieved } }),
-                    onError: (err) => console.error('[AI] Stream Error:', err)
-                })
+            const snapshot = await scraper.fetchMetrics()
+            if (!snapshot) {
+                console.log(`[Tick] fetchMetrics returned null for ${id}`)
+                return;
             }
-        }
 
+            history.push(snapshot)
+            if (history.length > 144) history.shift() // keep last 12 mins at 5s = 144 ticks
+
+            const { score, phase, ifScore, ewmaScore, combined } = scoringEngine.update(snapshot, history)
+            const attribution = attributionEngine.compute(snapshot, history.slice(0, 48))
+
+            // Save Metric Snapshot to Database
+            try {
+                await prisma.metricSnapshot.create({
+                    data: {
+                        sessionId: id,
+                        rate: snapshot.rate,
+                        errorRate: snapshot.errorRate,
+                        p99: snapshot.p99,
+                        saturation: snapshot.saturation,
+                        riskScore: score
+                    }
+                })
+            } catch (dbErr) {
+                console.error(`[SessionManager] Database error saving snapshot for ${id}:`, dbErr.message)
+            }
+
+            // Log every 3rd tick for debugging
+            if (history.length % 3 === 0 || score > 10) {
+                console.log(`[Tick] ${service} | tick=${history.length} phase=${phase} score=${score} mode=${scraper.mode || 'N/A'}`)
+            }
+
+            // Broadcast snapshot
+            broadcast({
+                type: 'METRIC_TICK',
+                payload: { sessionId: id, snapshot, scoring: { score, phase }, attribution }
+            })
+
+            // Check for alerts
+            const alert = alertEngine.evaluate(score, attribution, id)
+            if (alert) {
+                console.log(`[Alert] ${alert.sev} fired for ${id} (Score: ${score})`)
+                broadcast({ type: 'ALERT', payload: alert })
+
+                // Auto-analyze criticals
+                if (alert.autoAnalyze) {
+                    broadcast({ type: 'AI_STREAM_START', payload: { sessionId: id } })
+
+                    streamAnalysis({
+                        score,
+                        deploymentId: id,
+                        attribution,
+                        history: history.slice(-6),
+                        onToken: (text) => broadcast({ type: 'AI_STREAM_TOKEN', payload: { sessionId: id, text } }),
+                        onDone: ({ retrieved }) => broadcast({ type: 'AI_STREAM_DONE', payload: { sessionId: id, retrieved } }),
+                        onError: (err) => console.error('[AI] Stream Error:', err)
+                    })
+                }
+            }
+        } catch (err) {
+            console.error(`[Tick] Error in tick loop for ${id}:`, err)
+        }
     }, 5000) // 5s tick
 
     sessions.set(id, {
@@ -113,6 +121,7 @@ export function startSession({ id, service, environment, failureMode, deployType
         scoringEngine,
         attributionEngine,
         alertEngine,
+        history,
         interval: tickInterval,
         status: 'ACTIVE'
     })
@@ -137,6 +146,47 @@ export function endSession(id) {
 }
 
 /** Inject fault into running session's scraper */
+export function triggerManualAnalysis(id) {
+    const s = sessions.get(id)
+    if (!s || s.status !== 'ACTIVE') return false
+
+    // Pull current metrics
+    const score = s.scoringEngine.lastScore
+    if (score < 5) return false // No anomaly to analyze
+
+    // Only allow one stream at a time per session
+    if (s.analyzing) return false
+    s.analyzing = true
+
+    console.log(`[AI] Manual analysis triggered for ${id} (Score: ${score})`)
+    broadcast({ type: 'AI_STREAM_START', payload: { sessionId: id } })
+
+    const lastSnapshots = s.history.slice(-6)
+    const attribution = s.attributionEngine.compute(
+        lastSnapshots[lastSnapshots.length - 1],
+        s.history.slice(0, 48)
+    )
+
+    streamAnalysis({
+        score,
+        deploymentId: id,
+        attribution,
+        history: lastSnapshots,
+        onToken: (text) => broadcast({ type: 'AI_STREAM_TOKEN', payload: { sessionId: id, text } }),
+        onDone: ({ retrieved }) => {
+            s.analyzing = false
+            broadcast({ type: 'AI_STREAM_DONE', payload: { sessionId: id, retrieved } })
+        },
+        onError: (err) => {
+            s.analyzing = false
+            console.error('[AI] Stream Error:', err)
+            broadcast({ type: 'AI_STREAM_ERROR', payload: { sessionId: id, error: err } })
+        }
+    })
+
+    return true
+}
+
 export function injectFault(id, failureMode) {
     const session = sessions.get(id)
     if (!session) return false
