@@ -83,6 +83,12 @@ export function useDeployment() {
               store.finishAi(payload.retrieved)
             }
             break
+
+          case 'AI_STREAM_ERROR':
+            if (sid && sid === payload.sessionId) {
+              store.setAiError(payload.error)
+            }
+            break
         }
       }
 
