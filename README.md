@@ -6,6 +6,8 @@
 
 DeployShield AI is an intelligent, real-time platform that monitors your web deployments (like Vercel applications) for microscopic performance deviations. When an anomaly is detected, it utilizes an **Isolation Forest** machine learning model to calculate a Risk Index, and relies on **Claude (Anthropic)** powered by a **RAG Database** to provide an instant, actionable root-cause analysis!
 
+<img width="1470" height="739" alt="Screenshot 2026-02-28 at 6 51 43 PM" src="https://github.com/user-attachments/assets/5a608666-e5b8-44e9-b669-ebe7d6791587" />
+
 ---
 
 ## 🚀 The Core Problem & Our Innovation
