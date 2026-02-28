@@ -15,6 +15,7 @@ Modern SREs and DevOps teams suffer from **alert fatigue**. Traditional monitori
 **DeployShield's Innovation:** We utilize unsupervised machine learning (**Isolation Forest**) to dynamically learn the unique "normal" baseline of any application in real-time. Instead of raw alerts, we provide an actionable, normalized **Risk Score (0-100)** powered by statistical Z-score deviations, coupled with Generative AI (RAG) for automated incident root-cause analysis.
 
 ---
+<img width="2816" height="1536" alt="Gemini_Generated_Image_lj2yl3lj2yl3lj2y" src="https://github.com/user-attachments/assets/da2d139d-2958-42f5-a00f-b8d3a46e44fa" />
 
 ## 🧠 How the AI Engine Works (The "Secret Sauce")
 
