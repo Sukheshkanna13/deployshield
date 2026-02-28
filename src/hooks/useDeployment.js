@@ -1,139 +1,192 @@
 /**
- * useDeployment — Session lifecycle management + engine orchestration
+ * useDeployment — Session lifecycle and WebSocket connection hook
  *
- * Owns the engine instances (stable via useRef).
- * Coordinates the full tick loop: MetricEngine → ScoringEngine → AlertEngine → AttributionEngine
- * Wires results into Zustand store.
- * Auto-triggers Claude analysis on CRITICAL/EMERGENCY alerts (rate limited).
+ * Fixed: uses useRef for WS to avoid re-render loops.
+ * Fixed: uses individual selectors to prevent unnecessary re-renders.
  */
-import { useRef, useEffect, useCallback } from 'react'
-import { MetricEngine }    from '@/engines/MetricEngine'
-import { ScoringEngine }   from '@/engines/ScoringEngine'
-import { AlertEngine }     from '@/engines/AlertEngine'
-import { AttributionEngine } from '@/engines/AttributionEngine'
-import { streamAnalysis }  from '@/ai/claudeAnalysis'
-import useStore            from '@/store/useStore'
+import { useEffect, useCallback, useRef } from 'react'
+import useStore from '@/store/useStore'
+
+// Keep WS outside React to avoid re-render loops entirely
+let globalWs = null
 
 export function useDeployment() {
-  const ME  = useRef(new MetricEngine())
-  const SE  = useRef(new ScoringEngine())
-  const AE  = useRef(new AlertEngine())
-  const AtE = useRef(new AttributionEngine())
+  // Use individual selectors to prevent full-store re-renders
+  const session = useStore(s => s.session)
+  const settings = useStore(s => s.settings)
+  const startSession = useStore(s => s.startSession)
+  const endSession = useStore(s => s.endSession)
+  const pushMetricSnapshot = useStore(s => s.pushMetricSnapshot)
+  const setScoringResult = useStore(s => s.setScoringResult)
+  const pushAlert = useStore(s => s.pushAlert)
+  const clearAlerts = useStore(s => s.clearAlerts)
+  const setAiLoading = useStore(s => s.setAiLoading)
+  const appendAiToken = useStore(s => s.appendAiToken)
+  const finishAi = useStore(s => s.finishAi)
+  const clearAiText = useStore(s => s.clearAiText)
 
-  const tickN       = useRef(0)
-  const histRef     = useRef([])
-  const intervalRef = useRef(null)
-  const autoFired   = useRef(false)
-  const aiInFlight  = useRef(false)
+  // Ref for the current session ID so the WS handler always sees latest
+  const sessionRef = useRef(null)
+  useEffect(() => { sessionRef.current = session?.id ?? null }, [session?.id])
 
-  const {
-    session, settings,
-    startSession, endSession,
-    pushMetricSnapshot, setScoringResult,
-    pushAlert, clearAlerts,
-    setAiLoading, appendAiToken, finishAi, setAiError, clearAiText,
-  } = useStore()
+  // ── Single persistent WebSocket connection with reconnection ──────
+  useEffect(() => {
+    if (globalWs && globalWs.readyState <= 1) return // already connected or connecting
 
-  // ── Tick function — runs every 5 seconds during an active session ──────
-  const tick = useCallback(() => {
-    const snap = ME.current.tick()
-    if (!snap) return
+    let reconnectDelay = 1000
+    let reconnectTimer = null
+    let intentionalClose = false
 
-    tickN.current++
-    histRef.current = [...histRef.current, snap].slice(-144)
-    pushMetricSnapshot(snap)
+    function connect() {
+      const ws = new WebSocket('ws://localhost:3001')
+      globalWs = ws
 
-    // Score every 3rd tick (every 15 seconds)
-    if (tickN.current % 3 !== 0) return
+      ws.onopen = () => {
+        console.log('[WS] Connected to backend')
+        reconnectDelay = 1000 // reset backoff on success
+      }
 
-    const result = SE.current.update(snap, histRef.current)
-    const attrs   = AtE.current.compute(snap, histRef.current.slice(0, settings.baselineTicks))
+      ws.onmessage = (event) => {
+        const { type, payload } = JSON.parse(event.data)
+        const sid = sessionRef.current
+        const store = useStore.getState()
 
-    setScoringResult(result, attrs)
+        switch (type) {
+          case 'METRIC_TICK':
+            if (sid && sid === payload.sessionId) {
+              store.pushMetricSnapshot(payload.snapshot)
+              store.setScoringResult(payload.scoring, payload.attribution)
+            }
+            break
 
-    if (result.phase !== 'SCORING') return
+          case 'ALERT':
+            if (sid && sid === payload.deploymentId) {
+              store.pushAlert(payload)
+            }
+            break
 
-    const alert = AE.current.evaluate(result.score, attrs, session?.id || 'unknown')
-    if (alert) {
-      pushAlert(alert)
-      // Auto-trigger Claude analysis on first CRITICAL or EMERGENCY
-      if (settings.autoAnalyze && !autoFired.current && alert.autoAnalyze && !aiInFlight.current) {
-        autoFired.current = true
-        triggerAnalysis(result.score, attrs, histRef.current)
+          case 'AI_STREAM_START':
+            if (sid && sid === payload.sessionId) {
+              store.setAiLoading(true)
+              store.clearAiText()
+            }
+            break
+
+          case 'AI_STREAM_TOKEN':
+            if (sid && sid === payload.sessionId) {
+              store.appendAiToken(payload.text)
+            }
+            break
+
+          case 'AI_STREAM_DONE':
+            if (sid && sid === payload.sessionId) {
+              store.finishAi(payload.retrieved)
+            }
+            break
+
+          case 'AI_STREAM_ERROR':
+            if (sid && sid === payload.sessionId) {
+              store.setAiError(payload.error)
+            }
+            break
+        }
+      }
+
+      ws.onerror = (err) => console.error('[WS] Error:', err)
+      ws.onclose = () => {
+        console.log('[WS] Disconnected')
+        globalWs = null
+        // Auto-reconnect with exponential backoff
+        if (!intentionalClose) {
+          console.log(`[WS] Reconnecting in ${reconnectDelay / 1000}s...`)
+          reconnectTimer = setTimeout(() => {
+            reconnectDelay = Math.min(reconnectDelay * 2, 10000)
+            connect()
+          }, reconnectDelay)
+        }
       }
     }
-  }, [session, settings, pushMetricSnapshot, setScoringResult, pushAlert])
 
-  // ── Start / stop tick loop based on session state ──────────────────────
-  useEffect(() => {
-    if (session) {
-      intervalRef.current = setInterval(tick, settings.tickIntervalMs)
-    } else {
-      clearInterval(intervalRef.current)
+    connect()
+
+    return () => {
+      intentionalClose = true
+      clearTimeout(reconnectTimer)
+      if (globalWs) { globalWs.close(); globalWs = null }
     }
-    return () => clearInterval(intervalRef.current)
-  }, [session?.id, tick, settings.tickIntervalMs])
+  }, []) // Only run once on mount
 
-  // ── Claude analysis trigger ────────────────────────────────────────────
-  const triggerAnalysis = useCallback(async (score, attrs, hist) => {
-    if (aiInFlight.current) return
-    aiInFlight.current = true
-    clearAiText()
-    setAiLoading(true)
-
-    await streamAnalysis({
-      score,
-      deploymentId: session?.id || 'unknown',
-      attribution:  attrs,
-      history:      hist.slice(-6),
-      onToken:  token  => appendAiToken(token),
-      onDone:   result => {
-        finishAi(result?.retrieved || [])
-        aiInFlight.current = false
-      },
-      onError:  msg    => {
-        setAiError(msg)
-        aiInFlight.current = false
-      },
-    })
-  }, [session, clearAiText, setAiLoading, appendAiToken, finishAi, setAiError])
-
-  // ── Public API ─────────────────────────────────────────────────────────
-  const deploy = useCallback((type, service, failureMode) => {
-    if (session) return
-    // Reset all engines
-    SE.current.reset()
-    AE.current.reset()
-    histRef.current = []
-    tickN.current   = 0
-    autoFired.current = false
-    aiInFlight.current = false
-
-    ME.current.setProfile(service || settings.selectedService)
-    ME.current.setMode(type, failureMode || settings.selectedFailure)
+  // ── Deploy function ────────────────────────────────────────────────
+  const deploy = useCallback(async (type, service, failureMode) => {
+    console.log('[Deploy] Button clicked!', { type, service, failureMode, hasSession: !!session })
+    if (session) {
+      console.log('[Deploy] Blocked — session already active:', session.id)
+      return
+    }
 
     clearAlerts()
     clearAiText()
-    startSession({ type, service: service || settings.selectedService, failureMode: failureMode || settings.selectedFailure })
+
+    try {
+      console.log('[Deploy] Sending POST to backend...')
+      const res = await fetch('http://localhost:3001/api/webhook/deploy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': settings.selectedApiKey || 'test-api-key'
+        },
+        body: JSON.stringify({
+          service: service || settings.selectedService,
+          environment: 'production',
+          mode: type === 'DEGRADED' ? (failureMode || settings.selectedFailure) : null,
+          deployType: type
+        })
+      })
+
+      const data = await res.json()
+      console.log('[Deploy] Response:', data)
+
+      if (!res.ok) {
+        console.error('[Deploy] Backend error:', data)
+        return
+      }
+
+      startSession({
+        id: data.sessionId,
+        type,
+        service: service || settings.selectedService,
+        failureMode: failureMode || settings.selectedFailure
+      })
+
+    } catch (err) {
+      console.error('[Deploy API Error]', err)
+    }
+
   }, [session, settings, startSession, clearAlerts, clearAiText])
 
-  const stopDeploy = useCallback(() => {
-    ME.current.setMode('IDLE')
+  const stopDeploy = useCallback(async () => {
+    if (!session?.id) return
+    try {
+      await fetch(`http://localhost:3001/api/webhook/deploy/stop/${session.id}`, { method: 'POST' })
+    } catch (e) {
+      console.error(e)
+    }
     endSession()
-  }, [endSession])
+  }, [session, endSession])
 
-  const manualAnalyze = useCallback(() => {
-    const { metrics } = useStore.getState()
-    triggerAnalysis(metrics.scoring.score, metrics.attrs, histRef.current)
-  }, [triggerAnalysis])
+  const manualAnalyze = useCallback(async () => {
+    if (!session?.id) return
+    try {
+      await fetch(`http://localhost:3001/api/session/${session.id}/analyze`, { method: 'POST' })
+    } catch (e) {
+      console.error('Failed to trigger manual analysis:', e)
+    }
+  }, [session])
 
   return {
     deploy,
     stopDeploy,
     manualAnalyze,
-    engineStats: {
-      ifStats: SE.current.IF?.getStats() || {},
-      tickN: tickN.current,
-    }
+    engineStats: { ifStats: { nTrees: 80 }, tickN: 0 }
   }
 }

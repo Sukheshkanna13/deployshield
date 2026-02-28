@@ -29,7 +29,7 @@ export function AttributionBar() {
                   width: `${(a.z / maxZ) * 100}%`,
                   background: c,
                   boxShadow: a.severity === 'critical' ? `0 0 8px ${c}` : 'none',
-                }}/>
+                }} />
             </div>
           </div>
         )
@@ -39,7 +39,7 @@ export function AttributionBar() {
 }
 
 /* ── AlertFeed ──────────────────────────────────────────────────────────── */
-const SEV_ICON  = { WARNING: '⚠', CRITICAL: '●', EMERGENCY: '⬟' }
+const SEV_ICON = { WARNING: '⚠', CRITICAL: '●', EMERGENCY: '⬟' }
 const SEV_COLOR = { WARNING: '#EAB308', CRITICAL: '#F97316', EMERGENCY: '#EF4444' }
 
 export function AlertFeed() {
@@ -58,7 +58,7 @@ export function AlertFeed() {
             <div className="flex-1 min-w-0">
               <div className="flex justify-between gap-2 mb-0.5">
                 <span className="text-[8px] font-display font-bold" style={{ color: c }}>{a.sev}</span>
-                <span className="text-[7px] font-mono text-muted">{a.ts.toLocaleTimeString()}</span>
+                <span className="text-[7px] font-mono text-muted">{new Date(a.ts).toLocaleTimeString()}</span>
               </div>
               <p className="text-[8px] font-mono text-dim truncate">{a.message}</p>
               {a.action && <p className="text-[7px] font-display text-muted mt-0.5 truncate">{a.action}</p>}
@@ -72,7 +72,7 @@ export function AlertFeed() {
 
 /* ── AIPanel ────────────────────────────────────────────────────────────── */
 export function AIPanel({ onAnalyze }) {
-  const ai    = useStore(s => s.ai)
+  const ai = useStore(s => s.ai)
   const score = useStore(s => s.metrics.scoring.score)
 
   const renderText = (text) => {
@@ -88,7 +88,7 @@ export function AIPanel({ onAnalyze }) {
     <div className="bg-void border border-edge rounded-lg p-3 flex flex-col h-full">
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <div className={`w-1.5 h-1.5 rounded-full ${ai.loading ? 'bg-signal animate-pulse' : 'bg-muted'}`}/>
+          <div className={`w-1.5 h-1.5 rounded-full ${ai.loading ? 'bg-signal animate-pulse' : 'bg-muted'}`} />
           <span className="text-[8px] font-display text-muted tracking-[2px] uppercase">Claude · Causal Analysis</span>
           {ai.retrieved?.length > 0 && (
             <span className="text-[7px] font-mono text-ok bg-surface px-1 py-0.5 rounded">
@@ -99,7 +99,7 @@ export function AIPanel({ onAnalyze }) {
         <button onClick={onAnalyze} disabled={ai.loading || score < 5}
           className="text-[8px] font-display font-bold tracking-wide px-2.5 py-1 rounded transition-all"
           style={{
-            color:  ai.loading || score < 5 ? '#1A2E4A' : '#0EA5E9',
+            color: ai.loading || score < 5 ? '#1A2E4A' : '#0EA5E9',
             border: `1px solid ${ai.loading || score < 5 ? '#0D1E35' : '#0EA5E9'}`,
             background: ai.loading || score < 5 ? 'transparent' : '#0A2540',
             cursor: ai.loading || score < 5 ? 'not-allowed' : 'pointer',
@@ -115,8 +115,8 @@ export function AIPanel({ onAnalyze }) {
             {score >= 5 ? 'Click ANALYZE to diagnose the anomaly with RAG context' : 'Deploy a release to begin monitoring'}
           </p>
         )}
-        {ai.text && <div>{renderText(ai.text)}{ai.loading && <span className="ai-cursor"/>}</div>}
-        {!ai.text && ai.loading && <span className="ai-cursor text-signal"/>}
+        {ai.text && <div>{renderText(ai.text)}{ai.loading && <span className="ai-cursor" />}</div>}
+        {!ai.text && ai.loading && <span className="ai-cursor text-signal" />}
       </div>
 
       {/* RAG retrieved incidents */}
