@@ -75,26 +75,6 @@ graph TD
 
 ---
 
-## 🎪 How to Creatively Showcase DeployShield (The Hackathon Pitch Flow)
-
-To deliver a jaw-dropping pitch that highlights both the real-time processing and the intelligence of the platform, follow this exact choreography:
-
-### Step 1: "The Steady State"
-1. Open the Dashboard.
-2. Select a stable, high-performance target like `Amazon (https://amazon.in)` from the dropdown.
-3. Click **Start Monitoring**.
-4. **The Pitch:** *"DeployShield is now actively scraping the live endpoint. Notice the timeline jumping into the 'LEARNING' phase. Over the next 60 seconds, our Isolation Forest algorithm is establishing a highly sophisticated baseline of what 'Normal' looks like for Amazon's latency and error rates."*
-
-### Step 2: "The Disaster" (Synthetic Fault Injection)
-1. Wait for LEARNING to transition to **SCORING**. The UI will show a perfectly nominal baseline with a score of `00-02`.
-2. Hit the **"Deploy Faulty Release"** toggle.
-3. **The Pitch:** *"Since we can't legally crash Amazon today, I am going to inject a synthetic fault pattern directly into our telemetry stream—simulating a disastrous deployment that introduced a memory leak and latency spike. Watch the Risk Index."*
-4. **Visuals:** The dashboard flashes Red. The Risk Score violently spikes to `80+ CRITICAL`. The charts dramatically warp out of bounds.
-
-### Step 3: "The AI Diagnosis"
-1. Proceed to the Claude Panel and click **ANALYZE**.
-2. **The Pitch:** *"Instead of a human spending 3 hours digging through Datadog logs, DeployShield mathematically fingerprints this exact crash signature, queries our historical RAG vector database for similar past incidents, and streams an exact engineering diagnosis and resolution plan."*
-3. **Visuals:** The terminal gracefully typewriter-streams the **DIAGNOSIS**, **ROOT CAUSE**, and **ACTION** plan contextually mapped to the specific failure pattern simulating the genius analyst in the machine.
 
 ---
 
