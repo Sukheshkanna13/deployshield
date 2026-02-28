@@ -7,12 +7,6 @@
 DeployShield AI is an intelligent, real-time platform that monitors your web deployments (like Vercel applications) for microscopic performance deviations. When an anomaly is detected, it utilizes an **Isolation Forest** machine learning model to calculate a Risk Index, and relies on **Claude (Anthropic)** powered by a **RAG Database** to provide an instant, actionable root-cause analysis!
 
 ---
-# DeployShield 🛡️ 
-**Intelligent AIOps & Real-Time Risk Engine for Modern Deployments**
-
-> **Built for the AMD AI Hackathon** > DeployShield transforms infrastructure monitoring from a *reactive* dashboard of charts into a *proactive*, mathematically driven AI security engine.
-
----
 
 ## 🚀 The Core Problem & Our Innovation
 
@@ -52,7 +46,8 @@ Our system doesn't guess; it calculates. Here is the lifecycle of the AI monitor
                                 [ Real-Time Dashboard ]
                                 (React + Vite + Tailwind)
 
-## ✨ Core Features
+
+✨ Core Features
 
 1. **Real-Time Telemetry Scraping**
    Continuously monitors your live deployment endpoints for key metrics: **Request Rate**, **Error Rate**, **P99 Latency**, and **Saturation**, updating the dashboard multiple times a second.
