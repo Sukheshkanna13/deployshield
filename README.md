@@ -1,77 +1,103 @@
-# 🛡 DeployShield AI
+# 🛡️ DeployShield AI
 
-**Real-Time Deployment Protection — AMD Instinct + ROCm + Claude RAG**
+> **Real-Time Deployment Risk Intelligence & Autonomous Root-Cause Analysis**
+> 
+> *Built for high-stakes, production-grade deployment monitoring.*
 
-## What's Real in This Prototype
+DeployShield AI is an intelligent, real-time platform that monitors your web deployments (like Vercel applications) for microscopic performance deviations. When an anomaly is detected, it utilizes an **Isolation Forest** machine learning model to calculate a Risk Index, and relies on **Claude (Anthropic)** powered by a **RAG Database** to provide an instant, actionable root-cause analysis!
 
-| Component | Implementation |
-|---|---|
-| **Isolation Forest** | Full Liu-Ting-Zhou 2008 algorithm. 80 trees, 128 subsample, depth 7. |
-| **EWMA Trend Scorer** | α=0.32 exponential weighted moving average, 15s update cycle. |
-| **Z-score Attribution** | Per-metric causal attribution. Identifies primary anomaly driver. |
-| **RAG Pipeline** | 12-dim metric fingerprint, cosine similarity over 12 AIOPS incidents. |
-| **Claude Analysis** | Live streaming Claude Sonnet API call with real metric + RAG context. |
-| **Rate Limiter** | Token bucket algorithm. 5 req/min, 10s min gap. Prevents API abuse. |
-| **Alert Engine** | Three-tier threshold system with hysteresis (no alert spam). |
-| **MetricEngine** | AR(1) autoregressive process, Box-Muller Gaussian noise. |
+---
 
-## Quick Start
+## ✨ Core Features
 
-```bash
-# 1. Install dependencies
-npm install
+1. **Real-Time Telemetry Scraping**
+   Continuously monitors your live deployment endpoints for key metrics: **Request Rate**, **Error Rate**, **P99 Latency**, and **Saturation**, updating the dashboard multiple times a second.
 
-# 2. Set API key
-cp .env.example .env.local
-# Edit .env.local — add your Anthropic API key
+2. **Isolation Forest Risk Engine (AI)**
+   Calculates a moving "baseline" of your application's normal behavior during its first 60 seconds (Learning Phase). Afterwards, it uses standard deviation mathematics (Z-Scores) to instantly detect anomalies and score your deployment's health from `0 - 100`.
 
-# 3. Run dev server
-npm run dev
+3. **RAG-Powered Causal Analysis (Claude AI)**
+   When a critical anomaly occurs, DeployShield mathematically fingerprints the metric deviation and queries a PostgreSQL Vector Database (`pgvector` via `aiops_incidents.json`) to find similar historical outages. This context is fed to Claude, streaming a highly technical, hyper-accurate Root Cause and Action plan right to your dashboard.
 
-# 4. Open http://localhost:5173
+4. **Bulletproof Demo Mode (Dynamic Mock Fallback)**
+   API keys revoked or rate-limited? No problem. DeployShield inherently falls back to a hyper-realistic, dynamically templated mock stream that perfectly mimics Claude's output using the exact RAG incident data your fault triggered.
+
+---
+
+## 🌊 System Architecture & Data Flow
+
+```mermaid
+graph TD
+    A[Target URL e.g., Vercel / Amazon] -->|Scraped every 5s| B(Backend Scraper Node.js)
+    B -->|Ingests Telemetry| C{Isolation Forest Engine}
+    C -->|Calculates Z-Scores & Risk| D[WebSocket Server]
+    D -->|Streams Data| E[React Dashboard]
+    
+    E -->|User clicks ANALYZE| F[Claude AI Engine]
+    F -->|Fingerprints Anomaly| G[(AIOps Vector DB)]
+    G -->|Returns Top Match| F
+    F -->|Streams Root Cause| E
 ```
 
-## Pages
+1. **The Scraper:** The Node.js backend continuously pings your target URL.
+2. **The Evaluator:** Calculates Z-Scores against the trailing 60-second baseline. If metrics deviate beyond safety thresholds, the Global Risk Score spikes.
+3. **The AI Analyst:** On manual analysis execution, the system matches the specific mathematical failure pattern to historical incidents and outputs an engineering diagnosis.
 
-- **Dashboard** — Live monitoring, risk gauge, 4 metric charts, AI analysis, alert log
-- **Deployments** — Full session history table with score trajectories
-- **Services** — Service catalog with baseline profiles and ML model info
-- **Analytics** — KPIs, risk distribution charts, detection rates
-- **Settings** — API key, thresholds, rate limiter status, RAG info
+---
 
-## Demo Script
+## 🏃‍♂️ Getting Started
 
-1. Go to Dashboard
-2. Select service (`api-gateway`) and failure mode (`Downstream Failure`)
-3. Click **▶ Deploy Good Release** — wait 4 min for baseline, watch score stay ~10
-4. Click **■ End Session**
-5. Click **⚠ Deploy Faulty Release** — watch score climb from 0→WARNING→CRITICAL
-6. Claude auto-analyzes at CRITICAL — shows RAG-retrieved similar incidents
-7. Go to Deployments and Analytics to show session history
+### Prerequisites
+- Node.js (v18+)
+- Postgres (optional if fully utilizing demo mock fallbacks)
+- Anthropic API Key (Claude)
 
-## Production Architecture
+### Setup Instructions
 
-In a real deployment:
-- MetricEngine → Go ingestion worker polling real Prometheus
-- IsolationForest inference → AMD Instinct MI300X via ROCm/HIP/MIOpen
-- EWMA + scoring → Parallel scoring on EPYC multi-core
-- RAG store → Pinecone/pgvector with real AIOPS incident embeddings
-- Claude analysis → Backend proxy (never expose key in client)
-- Alert engine → Triggers rollback via CI/CD pipeline API
+1. **Install Dependencies (Monorepo)**
+   ```bash
+   npm install
+   ```
+2. **Environment Variables**
+   Create a `.env` / `.env.local` file in the root based on `.env.example`:
+   ```env
+   ANTHROPIC_API_KEY=your_claude_sk_key
+   VITE_API_URL=http://localhost:3001
+   VITE_WS_URL=ws://localhost:3001
+   ```
+   *(Note: The Anthropic key purposely lacks the `VITE_` prefix to prevent frontend exposure!)*
 
-## Real Dataset
+3. **Run the Application**
+   ```bash
+   npm run dev:full
+   ```
+   This uses `concurrently` to boot both the Vite React Frontend (Port 5173) and the Node.js Backend WebSocket Server (Port 3001) simultaneously.
 
-To use the real AIOPS Challenge 2020 dataset:
-```bash
-# Download from: https://github.com/NetManAIOps/AIOps-Challenge-2020-Data
-npm run prepare-data -- --input ./raw/anomalies.csv
-```
+---
 
-## Deploy to Vercel
+## 🎪 How to Creatively Showcase DeployShield (The Hackathon Pitch Flow)
 
-```bash
-npm install -g vercel
-vercel
-# Set VITE_ANTHROPIC_API_KEY in Vercel dashboard → Project Settings → Environment Variables
-vercel --prod
-```
+To deliver a jaw-dropping pitch that highlights both the real-time processing and the intelligence of the platform, follow this exact choreography:
+
+### Step 1: "The Steady State"
+1. Open the Dashboard.
+2. Select a stable, high-performance target like `Amazon (https://amazon.in)` from the dropdown.
+3. Click **Start Monitoring**.
+4. **The Pitch:** *"DeployShield is now actively scraping the live endpoint. Notice the timeline jumping into the 'LEARNING' phase. Over the next 60 seconds, our Isolation Forest algorithm is establishing a highly sophisticated baseline of what 'Normal' looks like for Amazon's latency and error rates."*
+
+### Step 2: "The Disaster" (Synthetic Fault Injection)
+1. Wait for LEARNING to transition to **SCORING**. The UI will show a perfectly nominal baseline with a score of `00-02`.
+2. Hit the **"Deploy Faulty Release"** toggle.
+3. **The Pitch:** *"Since we can't legally crash Amazon today, I am going to inject a synthetic fault pattern directly into our telemetry stream—simulating a disastrous deployment that introduced a memory leak and latency spike. Watch the Risk Index."*
+4. **Visuals:** The dashboard flashes Red. The Risk Score violently spikes to `80+ CRITICAL`. The charts dramatically warp out of bounds.
+
+### Step 3: "The AI Diagnosis"
+1. Proceed to the Claude Panel and click **ANALYZE**.
+2. **The Pitch:** *"Instead of a human spending 3 hours digging through Datadog logs, DeployShield mathematically fingerprints this exact crash signature, queries our historical RAG vector database for similar past incidents, and streams an exact engineering diagnosis and resolution plan."*
+3. **Visuals:** The terminal gracefully typewriter-streams the **DIAGNOSIS**, **ROOT CAUSE**, and **ACTION** plan contextually mapped to the specific failure pattern simulating the genius analyst in the machine.
+
+---
+
+### Developed By:
+Built with ❤️ during the AI Hackathon by Sukhesh. 
+**Tech Stack:** React, TailwindCSS, Node.js, WebSockets, Anthropic Claude, RAG Architecture.
