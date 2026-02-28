@@ -17,6 +17,7 @@ Modern SREs and DevOps teams suffer from **alert fatigue**. Traditional monitori
 ---
 <img width="2816" height="1536" alt="Gemini_Generated_Image_lj2yl3lj2yl3lj2y" src="https://github.com/user-attachments/assets/da2d139d-2958-42f5-a00f-b8d3a46e44fa" />
 
+
 ## 🧠 How the AI Engine Works (The "Secret Sauce")
 
 Our system doesn't guess; it calculates. Here is the lifecycle of the AI monitoring:
