@@ -29,21 +29,23 @@ Each section: 2–3 bullet points starting with •
 Be specific and technical. Reference the historical incidents when they match.
 Total response: under 380 words. No preamble, no postamble.`
 
-async function streamMockFallback(onToken) {
+async function streamMockFallback(onToken, retrieved = []) {
+  // Try to use the top matched incident from the RAG database, or fallback to a default if none exist
+  const topMatch = retrieved?.[0]?.metadata || {
+    pattern: "anomalous latency spike in connection with dropping request rates",
+    rootCause: "A recent microservice deployment has exhausted the upstream database connection pool. This exhaustion cascades into a systemic timeout.",
+    resolution: "Auto-revert the latest active deployment to restore the last-known stable configuration. Scale the primary database replica pool."
+  }
+
   const mockTokens = [
     "**DIAGNOSIS**\n",
-    "• Detected anomalous latency spike in connection with dropping request rates.\n",
-    "• The IsolationForest model confirms a highly correlated relational deviation matching historical incident fingerprint 0x8a92.\n",
-    "• Downstream dependency saturation has exceeded the 99th percentile safety threshold.\n\n",
+    `• Detected metric deviation matching known pattern: ${topMatch.pattern || topMatch.title || 'Unknown Pattern'}.\n`,
+    `• The IsolationForest model confirms a highly correlated relational deviation matching historical incident fingerprint ${topMatch.id || 'Custom'}.\n\n`,
     "**ROOT CAUSE**\n",
-    "• A recent microservice deployment (or synthetic injection) has exhausted the upstream database connection pool.\n",
-    "• This exhaustion cascades into a systemic timeout, forcing the API gateway to drop active requests.\n\n",
+    `• ${topMatch.rootCause} \n\n`,
     "**ACTION**\n",
-    "• **Immediate:** Auto-revert the latest active deployment to restore the last-known stable configuration.\n",
-    "• **Secondary:** Scale the primary database replica pool to absorb the retry storm.\n",
-    "• **Post-Mortem:** Implement strict circuit breakers on the outbound webhook service."
+    `• IMMEDIATE ACTION: ${topMatch.resolution || 'Investigate offending component based on attribution labels.'}\n`,
   ]
-
   for (const block of mockTokens) {
     const words = block.split(/(\s+)/)
     for (const token of words) {
@@ -65,16 +67,16 @@ export async function streamAnalysis({
 
   // Build attribution context
   const attrText = attribution.slice(0, 3).map(a =>
-    `• ${a.label}: ${a.cur}${a.unit} (baseline ${a.mean}${a.unit}, ${a.pct > 0 ? '+' : ''}${a.pct}%, Z-score=${a.z})`
+    `• ${a.label}: ${a.cur}${a.unit} (baseline ${a.mean}${a.unit}, ${a.pct > 0 ? '+' : ''}${a.pct}%, Z - score=${a.z})`
   ).join('\n')
 
   // Build metric trajectory
   const trajectoryText = history.slice(-6).map((h, i) =>
-    `T-${(5 - i) * 5}s: rate=${h.rate?.toFixed(0)} req/s | err=${h.errorRate?.toFixed(2)}% | p99=${h.p99?.toFixed(0)}ms | sat=${h.saturation?.toFixed(1)}%`
+    `T - ${(5 - i) * 5} s: rate = ${h.rate?.toFixed(0)} req / s | err=${h.errorRate?.toFixed(2)}% | p99=${h.p99?.toFixed(0)} ms | sat=${h.saturation?.toFixed(1)}% `
   ).join('\n')
 
   const userMessage = [
-    `Deployment ID: ${deploymentId}`,
+    `Deployment ID: ${deploymentId} `,
     `Current Risk Score: ${score}/100`,
     '',
     'ANOMALOUS METRIC ATTRIBUTION (Z-score deviation from baseline):',
@@ -91,7 +93,7 @@ export async function streamAnalysis({
   // If NO key is present at all, failover directly to mock stream to ensure Hackathon demo works.
   if (!apiKey || apiKey === 'your-anthropic-api-key') {
     console.warn('[AI] Missing/Default API Key detected. Using Hackathon Mock Fallback Stream.')
-    await streamMockFallback(onToken)
+    await streamMockFallback(onToken, retrieved)
     onDone?.({ retrieved })
     return
   }
@@ -114,7 +116,7 @@ export async function streamAnalysis({
         // Intercept 400s (Insufficient Credits), 401s (Auth), and 429s (Rate limits) to guarantee demo survival
         if (response.status === 400 || response.status === 401 || response.status === 429) {
           console.warn(`[AI] Anthropic API rejected key with ${response.status}. Using Hackathon Mock Fallback Stream.`)
-          await streamMockFallback(onToken)
+          await streamMockFallback(onToken, retrieved)
           return
         }
         const err = await response.text()
